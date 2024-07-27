@@ -1,0 +1,92 @@
+volumes:
+    postgresql-mlflow-data:
+    mlflow-artifact-store:
+
+# This is just a template to be used by other containers
+x-app-template: &APP_TEMPLATE
+    user: "${USER_ID:-1000}"
+    hostname: "${HOST_NAME:-abhipreet}"
+    image: cybulde-model-training
+    build:
+        context: .
+        dockerfile: ./docker/Dockerfile
+        args:
+            USER_NAME: "${USER_NAME:-abhipreet}"
+            USER_ID : "${USER_ID:-1000}"
+    env_file:
+        - .envs/.postgres
+        - .envs/.mlflow-common
+        - .envs/.mlflow-dev
+    volumes:
+        - ./:/app/
+        - mlflow-artifact-store:/mlflow-artifact-store
+        - ~/.config/gcloud/:/home/${USER_NAME}/.config/gcloud
+
+
+services:
+  mlflow-db:
+    container_name: mlflow-backend-store
+    image: postgres:14
+    env_file:
+      - .envs/.mlflow-common
+      - .envs/.mlflow-dev
+      - .envs/.postgres
+    volumes:
+      - postgresql-mlflow-data:/var/lib/postgresql/data
+    ports:
+      - 5433:5432
+    profiles:
+      - dev
+
+  app-dev:
+    <<: *APP_TEMPLATE
+    container_name: cybulde-model-dev-container
+    ports:
+      - ${LOCAL_DEV_MLFLOW_SERVER_PORT}:${LOCAL_DEV_MLFLOW_SERVER_PORT} #mlflow dev port
+      - 8080:8080
+      - 8888:8888
+      - 8001:8001
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    profiles:
+      - dev
+
+
+
+  local-mlflow-db:
+    container_name: local-mlflow-backend-store
+    image: postgres:14
+    env_file:
+      - .envs/.postgres
+    profiles:
+      - local
+
+  local-app-dev:
+    image: local-mlflow-tracking-server
+    container_name: local-mlflow-tracking-server-container
+    build:
+        context: .
+        dockerfile: ./docker_local/Dockerfile
+        args:
+            MLFLOW_ARTIFACT_STORE: ${MLFLOW_ARTIFACT_STORE}
+            MLFLOW_BACKEND_STORE: ${MLFLOW_BACKEND_STORE}
+    ports:
+      - ${LOCAL_DEV_MLFLOW_SERVER_PORT}:${LOCAL_DEV_MLFLOW_SERVER_PORT} #mlflow dev port
+    depends_on:
+      - local-mlflow-db
+    env_file:
+      - .envs/.mlflow-common
+      - .envs/.mlflow-dev
+      - .envs/.postgres
+    volumes:
+        - ./:/app/
+        - mlflow-artifact-store:${MLFLOW_ARTIFACT_STORE}
+    profiles:
+      - local
+    
+
