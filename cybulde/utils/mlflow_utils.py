@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from typing import Optional
+from typing import Optional, Iterable
 from mlflow.tracking.fluent import ActiveRun
 import mlflow
 
@@ -27,4 +27,4 @@ def set_experiment(experiment_name: Optional[str] = None) -> None:
     mlflow.set_experiment(experiment_name)
 
 
-def 
+
